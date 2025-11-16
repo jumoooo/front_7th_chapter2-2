@@ -5,12 +5,11 @@
 export const shallowEquals = (a: unknown, b: unknown): boolean => {
   // 여기를 구현하세요.
   // Object.is(), Array.isArray(), Object.keys() 등을 활용하여 1단계 깊이의 비교를 구현합니다.
-
   if (Object.is(a, b)) return true;
   if (a === null || b === null) return false;
   if (typeof a !== typeof b) return false;
 
-  // number
+  // 배열 비교
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) {
@@ -19,6 +18,7 @@ export const shallowEquals = (a: unknown, b: unknown): boolean => {
     return true;
   }
 
+  // 객체 비교
   if (typeof a === "object" && typeof b === "object") {
     const objA = a as Record<string, unknown>;
     const objB = b as Record<string, unknown>;
@@ -43,5 +43,38 @@ export const shallowEquals = (a: unknown, b: unknown): boolean => {
 export const deepEquals = (a: unknown, b: unknown): boolean => {
   // 여기를 구현하세요.
   // 재귀적으로 deepEquals를 호출하여 중첩된 구조를 비교해야 합니다.
-  return a === b;
+  if (Object.is(a, b)) return true;
+
+  if (a === null || b === null) return false;
+  if (typeof a !== typeof b) return false;
+
+  // 배열 비교
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      // 내부에 중첩된 객체가 있을 수 있으므로 재귀적으로 비교
+      if (!deepEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  // 객체 비교
+  if (typeof a === "object" && typeof b === "object") {
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+
+    const keysA = Object.keys(objA);
+    const keysB = Object.keys(objB);
+
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+      // 해당 객체에 키가 있는지 확인 (a는 확인 했으므로 b 만 조회)
+      if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+      // 내부에 중첩된 객체가 있을 수 있으므로 재귀적으로 비교
+      if (!deepEquals(objA[key], objB[key])) return false;
+    }
+    return true;
+  }
+
+  return false;
 };
