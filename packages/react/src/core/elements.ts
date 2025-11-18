@@ -1,23 +1,47 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isEmptyValue } from "../utils";
 import { VNode } from "./types";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Fragment, TEXT_ELEMENT } from "./constants";
 
 /**
  * 주어진 노드를 VNode 형식으로 정규화합니다.
  * null, undefined, boolean, 배열, 원시 타입 등을 처리하여 일관된 VNode 구조를 보장합니다.
  */
-export const normalizeNode = (node: VNode): VNode | null => {
-  // 여기를 구현하세요.
-  return null;
+export const normalizeNode = (node: VNode): VNode | null | VNode[] => {
+  if (isEmptyValue(node) || typeof node === "boolean") {
+    return null;
+  }
+
+  // 문자열 또는 숫자인 경우 텍스트 노드 생성
+  if (typeof node === "string" || typeof node === "number") {
+    return createTextElement(node);
+  }
+
+  // 중첨 배열 내리기, 빈 값 제거
+  if (Array.isArray(node)) {
+    // 배열이면 재귀적으로 normalizeNode 후 평탄화
+    return node
+      .map((child) => normalizeNode(child))
+      .flat()
+      .filter(Boolean) as VNode[];
+  }
+
+  return node as VNode;
 };
 
 /**
  * 텍스트 노드를 위한 VNode를 생성합니다.
  */
-const createTextElement = (node: VNode): VNode => {
-  // 여기를 구현하세요.
-  return {} as VNode;
+const createTextElement = (value: string | number): VNode => {
+  return {
+    type: TEXT_ELEMENT,
+    key: null,
+    props: {
+      children: [],
+      nodeValue: String(value),
+    },
+  } as VNode;
 };
 
 /**
@@ -28,8 +52,38 @@ export const createElement = (
   type: string | symbol | React.ComponentType<any>,
   originProps?: Record<string, any> | null,
   ...rawChildren: any[]
-) => {
-  // 여기를 구현하세요.
+): VNode => {
+  // key 추출
+  const key = originProps?.key ?? null;
+
+  // key는 props에서 제거
+  const props = { ...originProps };
+  if (props && "key" in props) delete props.key;
+
+  // children 초기화
+  let children: VNode[] = [];
+
+  // 함수형 컴포넌트가 아니면 children 처리
+  if (typeof type === "string" || typeof type === "symbol") {
+    // rawChildren 정규화
+    children =
+      rawChildren.length > 0
+        ? (rawChildren
+            .map((child) => normalizeNode(child))
+            .flat()
+            .filter(Boolean) as VNode[])
+        : ([] as VNode[]);
+  }
+
+  // 최종 VNode 반환
+  return {
+    type,
+    key,
+    props: {
+      ...props,
+      ...(children.length > 0 ? { children } : {}), // children 없는 경우 아예 props에 넣지 않음
+    },
+  } as VNode;
 };
 
 /**
@@ -40,9 +94,11 @@ export const createChildPath = (
   parentPath: string,
   key: string | null,
   index: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   nodeType?: string | symbol | React.ComponentType,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   siblings?: VNode[],
 ): string => {
-  // 여기를 구현하세요.
-  return "";
+  const id = key ?? index.toString();
+  return parentPath ? `${parentPath}.${id}` : id;
 };

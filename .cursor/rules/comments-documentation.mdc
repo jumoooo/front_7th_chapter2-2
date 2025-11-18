@@ -1,0 +1,105 @@
+# Comments and Documentation Rules
+
+## For AI Agent
+
+### Comment Guidelines
+
+- Write all comments in Korean as per user preference
+- Use JSDoc format for function and class documentation
+- Explain "why" not just "what" - provide context for complex logic
+- Keep comments up-to-date with code changes
+- Remove obsolete comments
+
+### JSDoc Format
+
+```typescript
+/**
+ * 함수의 목적과 동작을 설명합니다.
+ *
+ * @param paramName - 매개변수 설명
+ * @returns 반환값 설명
+ * @example
+ * // 사용 예제
+ * const result = functionName(input);
+ */
+```
+
+### Comment Types
+
+- **Function/Class comments**: Use JSDoc format, explain purpose and usage
+- **Inline comments**: Explain complex logic, non-obvious decisions, or workarounds
+- **TODO comments**: Mark incomplete work with context: `// TODO: 설명`
+- **Implementation guide comments**: Follow existing pattern: `// 여기를 구현하세요.`
+
+### Code Documentation
+
+- Document public APIs and exported functions
+- Explain complex algorithms or business logic
+- Document type constraints and assumptions
+- Include usage examples for utility functions
+
+### When to Comment
+
+- Complex algorithms or logic that isn't immediately obvious
+- Business rules or domain-specific logic
+- Workarounds or temporary solutions
+- Performance optimizations that might seem counterintuitive
+- Edge cases or special handling
+
+### When NOT to Comment
+
+- Self-explanatory code (good code is self-documenting)
+- Obvious variable names or simple operations
+- Comments that just repeat what the code does
+
+### Documentation Style
+
+- Use clear, concise Korean language
+- Use proper grammar and punctuation
+- Include code examples when helpful
+- Use markdown formatting in JSDoc when appropriate
+
+### Existing Patterns
+
+- Follow the existing comment style in the codebase
+- Use implementation guide comments: `// 여기를 구현하세요.`
+- Include step-by-step guidance in complex functions
+- Match the tone and style of existing documentation
+
+---
+
+## 사용자용 설명
+
+### 💬 주석 가이드라인
+
+- 사용자 선호에 따라 모든 주석은 한글로 작성합니다
+- 함수와 클래스 문서화에는 JSDoc 형식을 사용합니다
+- "무엇"이 아닌 "왜"를 설명합니다 - 복잡한 로직에 대한 맥락을 제공합니다
+
+### 📝 JSDoc 형식
+
+- 함수의 목적과 동작을 설명합니다
+- 매개변수와 반환값을 문서화합니다
+- 사용 예제를 포함합니다
+
+### 📌 주석 유형
+
+- **함수/클래스 주석**: JSDoc 형식 사용, 목적과 사용법 설명
+- **인라인 주석**: 복잡한 로직, 명확하지 않은 결정, 우회 방법 설명
+- **TODO 주석**: 맥락과 함께 미완성 작업 표시
+- **구현 가이드 주석**: 기존 패턴 따르기: `// 여기를 구현하세요.`
+
+### ✍️ 문서화 스타일
+
+- 명확하고 간결한 한글 사용
+- 적절한 문법과 구두점 사용
+- 도움이 되는 경우 코드 예제 포함
+- 기존 문서화 스타일과 일치
+
+### 🎯 언제 주석을 작성할까
+
+- 즉시 명확하지 않은 복잡한 알고리즘이나 로직
+- 비즈니스 규칙이나 도메인 특정 로직
+- 우회 방법이나 임시 해결책
+- 직관적이지 않을 수 있는 성능 최적화
+- 엣지 케이스나 특별한 처리

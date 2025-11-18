@@ -312,41 +312,42 @@ describe("Chapter 2-2 기본과제: MiniReact", () => {
         });
       });
     });
+    describe("setup > ", () => {
+      it("렌더 타깃 컨테이너가 없으면 에러를 던진다", () => {
+        expect(() => setup(<div />, null as never)).toThrowError();
+      });
 
-    it("렌더 타깃 컨테이너가 없으면 에러를 던진다", () => {
-      expect(() => setup(<div />, null as never)).toThrowError();
-    });
+      it("null 루트 엘리먼트는 렌더할 수 없다", () => {
+        const container = document.createElement("div");
+        expect(() => setup(null, container)).toThrowError();
+      });
 
-    it("null 루트 엘리먼트는 렌더할 수 없다", () => {
-      const container = document.createElement("div");
-      expect(() => setup(null, container)).toThrowError();
-    });
+      it("렌더는 컨테이너 내용을 새 DOM으로 교체한다", () => {
+        const container = document.createElement("div");
+        container.appendChild(document.createElement("span")).textContent = "old";
+        // <div><span>old</span></div>
+        setup(<p>new</p>, container);
+        // <div><p>new</p></div>
 
-    it("렌더는 컨테이너 내용을 새 DOM으로 교체한다", () => {
-      const container = document.createElement("div");
-      container.appendChild(document.createElement("span")).textContent = "old";
+        expect(container.childNodes).toHaveLength(1);
+        expect(container.firstChild?.nodeName).toBe("P");
+        expect(container.firstChild?.textContent).toBe("new");
+      });
 
-      setup(<p>new</p>, container);
+      it("네이티브 요소를 DOM으로 생성한다", () => {
+        const container = document.createElement("div");
+        setup(
+          <div className="wrapper">
+            <span>hello</span>
+          </div>,
+          container,
+        );
 
-      expect(container.childNodes).toHaveLength(1);
-      expect(container.firstChild?.nodeName).toBe("P");
-      expect(container.firstChild?.textContent).toBe("new");
-    });
-
-    it("네이티브 요소를 DOM으로 생성한다", () => {
-      const container = document.createElement("div");
-
-      setup(
-        <div className="wrapper">
-          <span>hello</span>
-        </div>,
-        container,
-      );
-
-      const span = container.querySelector("span");
-      expect(span).not.toBeNull();
-      expect(span?.textContent).toBe("hello");
-      expect((span?.parentElement as HTMLElement)?.className).toBe("wrapper");
+        const span = container.querySelector("span");
+        expect(span).not.toBeNull();
+        expect(span?.textContent).toBe("hello");
+        expect((span?.parentElement as HTMLElement)?.className).toBe("wrapper");
+      });
     });
   });
 

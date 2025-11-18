@@ -1,0 +1,132 @@
+# Project Structure and Organization Rules
+
+## For AI Agent
+
+### Directory Structure
+- Follow existing project structure: `packages/react/src/`
+- Core functionality: `core/` directory
+- Utilities: `utils/` directory
+- Hooks: `hooks/` directory
+- Higher Order Components: `hocs/` directory
+- Tests: `__tests__/` directory
+- Client entry: `client/` directory
+
+### File Organization
+- One primary export per file when possible
+- Group related functionality together
+- Keep files focused on a single responsibility
+- Use index files for clean exports
+- Match file names to their primary export
+
+### Import Organization
+- Group imports: external libraries, then internal modules
+- Use absolute imports from `src/` when configured
+- Use relative imports for closely related files
+- Import types using `import type` syntax
+- Remove unused imports
+
+### Module Exports
+- Use named exports for utilities and functions
+- Use default exports sparingly (mainly for components)
+- Export types and interfaces for reuse
+- Create index files to re-export from subdirectories
+- Keep exports minimal - only export what's needed
+
+### Code Organization Within Files
+- Imports at the top
+- Type definitions and interfaces
+- Constants
+- Utility functions
+- Main functions/exports
+- Keep related code together
+
+### Project-Specific Patterns
+- Follow Mini React implementation patterns
+- Maintain separation: core rendering, hooks, HOCs, utilities
+- Keep VNode, Instance, Context types in `core/types.ts`
+- Keep constants in `core/constants.ts`
+- Keep validators in `utils/validators.ts`
+
+### File Naming
+- Use kebab-case for file names: `create-element.ts`
+- Match file name to primary function/type when possible
+- Use descriptive names that indicate file purpose
+- Test files: `*.test.ts` or `*.test.tsx`
+
+### Example Structure
+```
+packages/react/src/
+  core/
+    constants.ts      # Shared constants
+    types.ts          # Type definitions
+    context.ts        # Context management
+    elements.ts       # VNode creation
+    dom.ts            # DOM operations
+    reconciler.ts     # Reconciliation logic
+    hooks.ts          # Basic hooks
+    render.ts         # Rendering logic
+    setup.ts          # Setup functions
+    index.ts          # Core exports
+  hooks/
+    useRef.ts
+    useMemo.ts
+    useCallback.ts
+    index.ts
+  hocs/
+    memo.ts
+    deepMemo.ts
+    index.ts
+  utils/
+    validators.ts
+    equals.ts
+    enqueue.ts
+    index.ts
+  __tests__/
+    basic.mini-react.test.tsx
+    advanced.hooks.test.tsx
+```
+
+---
+
+## 사용자용 설명
+
+### 📁 디렉토리 구조
+- 기존 프로젝트 구조를 따릅니다: `packages/react/src/`
+- 핵심 기능: `core/` 디렉토리
+- 유틸리티: `utils/` 디렉토리
+- 훅: `hooks/` 디렉토리
+- 고차 컴포넌트: `hocs/` 디렉토리
+- 테스트: `__tests__/` 디렉토리
+
+### 📄 파일 구성
+- 가능하면 파일당 하나의 주요 export
+- 관련 기능을 함께 그룹화
+- 파일을 단일 책임에 집중
+- 깔끔한 export를 위해 index 파일 사용
+
+### 📦 모듈 Export
+- 유틸리티와 함수에는 named export 사용
+- default export는 드물게 사용 (주로 컴포넌트)
+- 재사용을 위해 타입과 인터페이스 export
+- 하위 디렉토리에서 재export하기 위해 index 파일 생성
+
+### 🏗️ 파일 내 코드 구성
+- 상단에 imports
+- 타입 정의 및 인터페이스
+- 상수
+- 유틸리티 함수
+- 주요 함수/exports
+- 관련 코드를 함께 유지
+
+### 🎯 프로젝트 특정 패턴
+- Mini React 구현 패턴을 따릅니다
+- 분리 유지: 핵심 렌더링, 훅, HOC, 유틸리티
+- VNode, Instance, Context 타입은 `core/types.ts`에 유지
+- 상수는 `core/constants.ts`에 유지
+- 검증자는 `utils/validators.ts`에 유지
+
+### 📝 파일 명명
+- 파일명에는 kebab-case 사용: `create-element.ts`
+- 가능하면 파일명을 주요 함수/타입과 일치
+- 파일 목적을 나타내는 설명적인 이름 사용
+- 테스트 파일: `*.test.ts` 또는 `*.test.tsx`
