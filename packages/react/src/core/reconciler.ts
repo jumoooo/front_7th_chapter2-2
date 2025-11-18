@@ -1,6 +1,6 @@
 import { context } from "./context";
 import { Fragment, NodeTypes, TEXT_ELEMENT, HookTypes } from "./constants";
-import { Instance, VNode } from "./types";
+import { Instance, VNode, EffectHook } from "./types";
 import {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getFirstDom,
@@ -31,7 +31,22 @@ export const reconcile = (
 ): Instance | null => {
   // 1. 새 노드가 null이면 기존 인스턴스를 제거합니다. (unmount)
   if (!node) {
-    if (instance) removeInstance(parentDom, instance);
+    if (instance) {
+      // 컴포넌트가 언마운트될 때 이펙트 클린업 함수를 실행합니다.
+      const instancePath = instance.path;
+      const hooksForPath = context.hooks.state.get(instancePath);
+      if (hooksForPath) {
+        hooksForPath.forEach((hook) => {
+          if (hook.kind === HookTypes.EFFECT) {
+            const effectHook = hook as EffectHook;
+            if (effectHook.cleanup && typeof effectHook.cleanup === "function") {
+              effectHook.cleanup();
+            }
+          }
+        });
+      }
+      removeInstance(parentDom, instance);
+    }
     return null;
   }
 
@@ -52,8 +67,11 @@ export const reconcile = (
       if (oldHooks) {
         // 이펙트 클린업 함수 실행
         oldHooks.forEach((hook) => {
-          if (hook.type === HookTypes.EFFECT && typeof hook.destroy === "function") {
-            hook.destroy();
+          if (hook.kind === HookTypes.EFFECT) {
+            const effectHook = hook as EffectHook;
+            if (effectHook.cleanup && typeof effectHook.cleanup === "function") {
+              effectHook.cleanup();
+            }
           }
         });
       }
@@ -253,6 +271,19 @@ function reconcileChildren(
   // key가 있는 경우: Map에 남아있는 것들
   keyedInstances.forEach((unusedInstance) => {
     if (unusedInstance) {
+      // 컴포넌트가 언마운트될 때 이펙트 클린업 함수를 실행합니다.
+      const instancePath = unusedInstance.path;
+      const hooksForPath = context.hooks.state.get(instancePath);
+      if (hooksForPath) {
+        hooksForPath.forEach((hook) => {
+          if (hook.kind === HookTypes.EFFECT) {
+            const effectHook = hook as EffectHook;
+            if (effectHook.cleanup && typeof effectHook.cleanup === "function") {
+              effectHook.cleanup();
+            }
+          }
+        });
+      }
       removeInstance(parentDom, unusedInstance);
     }
   });
@@ -260,6 +291,19 @@ function reconcileChildren(
   // key가 없는 경우: 사용되지 않은 인스턴스들
   unkeyedInstances.forEach((unusedInstance, index) => {
     if (unusedInstance && !usedUnkeyedIndices.has(index)) {
+      // 컴포넌트가 언마운트될 때 이펙트 클린업 함수를 실행합니다.
+      const instancePath = unusedInstance.path;
+      const hooksForPath = context.hooks.state.get(instancePath);
+      if (hooksForPath) {
+        hooksForPath.forEach((hook) => {
+          if (hook.kind === HookTypes.EFFECT) {
+            const effectHook = hook as EffectHook;
+            if (effectHook.cleanup && typeof effectHook.cleanup === "function") {
+              effectHook.cleanup();
+            }
+          }
+        });
+      }
       removeInstance(parentDom, unusedInstance);
     }
   });

@@ -1,10 +1,37 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { shallowEquals, withEnqueue } from "../utils";
 import { context } from "./context";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { EffectHook } from "./types";
 import { enqueueRender } from "./render";
 import { HookTypes } from "./constants";
+
+/**
+ * 렌더링 후 큐에 쌓인 이펙트들을 실행합니다.
+ * 각 이펙트를 실행하고, 클린업 함수가 반환되면 훅에 저장합니다.
+ */
+export const flushEffects = (): void => {
+  // 큐에 있는 모든 이펙트를 실행합니다.
+  while (context.effects.queue.length > 0) {
+    const { path, cursor } = context.effects.queue.shift()!;
+
+    // 해당 경로의 훅 상태 배열에서 이펙트 훅을 찾습니다.
+    const hooksForPath = context.hooks.state.get(path);
+    if (!hooksForPath) continue;
+
+    const hook = hooksForPath[cursor] as EffectHook | undefined;
+    if (!hook || hook.kind !== HookTypes.EFFECT) continue;
+
+    // 이펙트 함수를 실행합니다.
+    const cleanup = hook.effect();
+
+    // 클린업 함수가 반환되면 훅에 저장합니다.
+    if (typeof cleanup === "function") {
+      hook.cleanup = cleanup;
+    } else {
+      hook.cleanup = null;
+    }
+  }
+};
 
 /**
  * 사용되지 않는 컴포넌트의 훅 상태와 이펙트 클린업 함수를 정리합니다.
@@ -18,8 +45,11 @@ export const cleanupUnusedHooks = () => {
     if (!context.hooks.visited.has(path)) {
       // 이펙트 클린업 함수 실행
       hooks.forEach((hook) => {
-        if (hook.type === HookTypes.EFFECT && typeof hook.destroy === "function") {
-          hook.destroy(); // effect cleanup 실행
+        if (hook.kind === HookTypes.EFFECT) {
+          const effectHook = hook as EffectHook;
+          if (effectHook.cleanup && typeof effectHook.cleanup === "function") {
+            effectHook.cleanup(); // effect cleanup 실행
+          }
         }
       });
 
@@ -83,11 +113,57 @@ export const useState = <T>(initialValue: T | (() => T)): [T, (nextValue: T | ((
  * @param effect - 실행할 이펙트 함수. 클린업 함수를 반환할 수 있습니다.
  * @param deps - 의존성 배열. 이 값들이 변경될 때만 이펙트가 다시 실행됩니다.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const useEffect = (effect: () => (() => void) | void, deps?: unknown[]): void => {
-  // 여기를 구현하세요.
-  // 1. 이전 훅의 의존성 배열과 현재 의존성 배열을 비교(shallowEquals)합니다.
-  // 2. 의존성이 변경되었거나 첫 렌더링일 경우, 이펙트 실행을 예약합니다.
-  // 3. 이펙트 실행 전, 이전 클린업 함수가 있다면 먼저 실행합니다.
-  // 4. 예약된 이펙트는 렌더링이 끝난 후 비동기로 실행됩니다.
+  // 1. 현재 실행 중인 컴포넌트의 고유 경로와 훅 커서를 가져옵니다.
+  const path = context.hooks.currentPath;
+  const cursor = context.hooks.currentCursor;
+
+  // 2. 해당 경로에 대한 훅 상태 배열이 없으면 새로 만듭니다.
+  if (!context.hooks.state.has(path)) {
+    context.hooks.state.set(path, []);
+  }
+
+  const hooksForPath = context.hooks.state.get(path)!;
+  const prevHook = hooksForPath[cursor] as EffectHook | undefined;
+
+  // 3. 의존성 배열 비교: 이전 훅이 없거나 의존성이 변경되었는지 확인합니다.
+  const shouldRunEffect =
+    !prevHook || // 첫 렌더링
+    !shallowEquals(prevHook.deps, deps); // 의존성 변경
+
+  // 4. 이전 클린업 함수가 있으면 먼저 실행합니다.
+  if (prevHook && prevHook.cleanup) {
+    prevHook.cleanup();
+  }
+
+  // 5. 이펙트를 실행해야 하는 경우, 큐에 추가합니다.
+  if (shouldRunEffect) {
+    // 이펙트 함수와 의존성 배열을 훅에 저장합니다.
+    const hook: EffectHook = {
+      kind: HookTypes.EFFECT,
+      deps: deps ?? null,
+      cleanup: null, // 실행 후 클린업 함수가 반환되면 여기에 저장됩니다.
+      effect,
+    };
+    hooksForPath[cursor] = hook;
+
+    // 이펙트 실행을 큐에 추가합니다 (렌더링 후 비동기로 실행됨)
+    context.effects.queue.push({ path, cursor });
+  } else {
+    // 의존성이 변경되지 않았으면 기존 훅을 유지합니다.
+    // 이펙트는 실행하지 않지만, 훅 인덱스는 유지해야 합니다.
+    if (!prevHook) {
+      // 이전 훅이 없는데 shouldRunEffect가 false인 경우는 없지만, 타입 안전성을 위해 처리합니다.
+      const hook: EffectHook = {
+        kind: HookTypes.EFFECT,
+        deps: deps ?? null,
+        cleanup: null,
+        effect,
+      };
+      hooksForPath[cursor] = hook;
+    }
+  }
+
+  // 6. 다음 훅이 올바른 인덱스를 참조하도록 커서를 갱신합니다.
+  context.hooks.cursor.set(path, cursor + 1);
 };
