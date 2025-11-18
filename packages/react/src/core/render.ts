@@ -13,8 +13,9 @@ export const render = (): void => {
   const root = context.root;
   if (!root.container || !root.node) return;
 
-  // 1. 훅 컨텍스트를 초기화합니다.
-  context.hooks.clear();
+  // 1. visited Set만 초기화합니다. (상태는 유지해야 함)
+  // 각 컴포넌트 렌더링 시 reconcile에서 cursor는 이미 0으로 리셋됩니다.
+  context.hooks.visited.clear();
 
   // 2. reconcile 함수를 호출하여 루트 노드를 재조정합니다.
   // reconcile 함수 내부에서 이미 DOM 삽입/제거가 처리되므로 여기서는 인스턴스만 갱신합니다.

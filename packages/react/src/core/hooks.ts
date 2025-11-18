@@ -3,27 +3,31 @@ import { shallowEquals, withEnqueue } from "../utils";
 import { context } from "./context";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { EffectHook } from "./types";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { enqueueRender } from "./render";
 import { HookTypes } from "./constants";
 
 /**
  * 사용되지 않는 컴포넌트의 훅 상태와 이펙트 클린업 함수를 정리합니다.
+ * visited Set에 없는 경로의 훅만 정리합니다.
  */
 export const cleanupUnusedHooks = () => {
   if (!context.hooks) return;
 
-  // 각 컴포넌트 경로(path)의 훅 배열을 순회
-  for (const hooks of context.hooks.state.values()) {
-    hooks.forEach((hook) => {
-      if (hook.type === HookTypes.EFFECT && typeof hook.destroy === "function") {
-        hook.destroy(); // effect cleanup 실행
-      }
-    });
-  }
+  // visited Set에 없는 경로의 훅들을 정리합니다.
+  for (const [path, hooks] of context.hooks.state.entries()) {
+    if (!context.hooks.visited.has(path)) {
+      // 이펙트 클린업 함수 실행
+      hooks.forEach((hook) => {
+        if (hook.type === HookTypes.EFFECT && typeof hook.destroy === "function") {
+          hook.destroy(); // effect cleanup 실행
+        }
+      });
 
-  // 훅 상태 초기화
-  context.hooks.clear();
+      // 사용되지 않는 경로의 훅 상태 삭제
+      context.hooks.state.delete(path);
+      context.hooks.cursor.delete(path);
+    }
+  }
 };
 
 /**
@@ -32,16 +36,46 @@ export const cleanupUnusedHooks = () => {
  * @returns [현재 상태, 상태를 업데이트하는 함수]
  */
 export const useState = <T>(initialValue: T | (() => T)): [T, (nextValue: T | ((prev: T) => T)) => void] => {
-  // 여기를 구현하세요.
-  // 1. 현재 컴포넌트의 훅 커서와 상태 배열을 가져옵니다.
-  // 2. 첫 렌더링이라면 초기값으로 상태를 설정합니다.
-  // 3. 상태 변경 함수(setter)를 생성합니다.
-  //    - 새 값이 이전 값과 같으면(Object.is) 재렌더링을 건너뜁니다.
-  //    - 값이 다르면 상태를 업데이트하고 재렌더링을 예약(enqueueRender)합니다.
-  // 4. 훅 커서를 증가시키고 [상태, setter]를 반환합니다.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const setState = (nextValue: T | ((prev: T) => T)) => {};
-  return [initialValue as T, setState];
+  // 1. 현재 실행 중인 컴포넌트의 고유 경로와 훅 커서를 가져옵니다.
+  const path = context.hooks.currentPath;
+  const cursor = context.hooks.currentCursor;
+
+  // 2. 해당 경로에 대한 훅 상태 배열이 없으면 새로 만듭니다.
+  if (!context.hooks.state.has(path)) {
+    context.hooks.state.set(path, []);
+  }
+
+  const hooksForPath = context.hooks.state.get(path)!;
+  let hook = hooksForPath[cursor] as { kind: string; type?: string; value: T } | undefined;
+
+  // 3. 최초 실행이라면 초기값(또는 이니셜라이저 함수)을 평가하여 저장합니다.
+  if (!hook) {
+    const value = typeof initialValue === "function" ? (initialValue as () => T)() : initialValue;
+    hook = {
+      kind: HookTypes.STATE,
+      type: HookTypes.STATE,
+      value,
+    };
+    hooksForPath[cursor] = hook;
+  }
+
+  const hookIndex = cursor;
+  const setState = (nextValue: T | ((prev: T) => T)) => {
+    // 4. setter는 이전 값을 기반으로 새 값을 계산하고, 값이 달라진 경우에만 재렌더를 요청합니다.
+    const currentHook = hooksForPath[hookIndex] as { value: T };
+    const previous = currentHook.value;
+    const next = typeof nextValue === "function" ? (nextValue as (prev: T) => T)(previous) : nextValue;
+
+    if (Object.is(previous, next)) return;
+
+    currentHook.value = next;
+    enqueueRender();
+  };
+
+  // 5. 다음 훅이 올바른 인덱스를 참조하도록 커서를 갱신합니다.
+  context.hooks.cursor.set(path, hookIndex + 1);
+
+  return [(hooksForPath[hookIndex] as { value: T }).value, setState];
 };
 
 /**

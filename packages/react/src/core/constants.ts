@@ -15,6 +15,7 @@ export const NodeTypes = {
 export type NodeType = ValueOf<typeof NodeTypes>;
 
 export const HookTypes = {
+  STATE: "state",
   EFFECT: "effect",
 } as const;
 
