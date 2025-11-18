@@ -5,6 +5,7 @@ import {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getFirstDom,
   getFirstDomFromChildren,
+  getDomNodes,
   insertInstance,
   removeInstance,
   setDomProps,
@@ -107,6 +108,34 @@ export const reconcile = (
     // 자식 DOM 재조정 (key 기반 reconciliation)
     const childNodes = normalizeChildren(nextNode.props.children);
     instance.children = reconcileChildren(instance.dom as HTMLElement, instance.children || [], childNodes, path);
+    return instance;
+  }
+
+  // Fragment 업데이트
+  if (nextNode.type === Fragment) {
+    // Fragment는 자체 DOM이 없으므로, 자식들을 재조정할 때 부모 DOM을 사용해야 합니다
+    // 기존 자식 인스턴스가 있으면 그 DOM의 부모를 찾아서 사용하고, 없으면 parentDom을 사용
+    const existingChildInstance = instance.children?.[0];
+    let childParentDom = parentDom;
+
+    if (existingChildInstance) {
+      // 자식 인스턴스의 첫 번째 DOM 노드를 찾음
+      const childDom = getFirstDomFromChildren([existingChildInstance]);
+      if (childDom) {
+        // DOM 노드의 부모 요소를 찾음 (Text 노드인 경우도 처리)
+        // parentElement는 HTMLElement만 반환하므로, Text 노드의 경우 parentNode를 사용
+        if (childDom.parentElement) {
+          childParentDom = childDom.parentElement;
+        } else if (childDom.parentNode && childDom.parentNode instanceof HTMLElement) {
+          childParentDom = childDom.parentNode;
+        }
+      }
+    }
+
+    // Fragment의 자식들을 재조정합니다
+    const childNodes = normalizeChildren(nextNode.props.children);
+    instance.children = reconcileChildren(childParentDom, instance.children || [], childNodes, path);
+    instance.node = nextNode;
     return instance;
   }
 
@@ -307,6 +336,45 @@ function reconcileChildren(
       removeInstance(parentDom, unusedInstance);
     }
   });
+
+  // 5. DOM 순서 재배치: 역순으로 순회하여 올바른 위치에 DOM 배치
+  // 역순으로 순회하면 다음 인스턴스의 첫 DOM 노드를 anchor로 사용할 수 있어 효율적입니다
+  for (let i = newInstances.length - 1; i >= 0; i--) {
+    const instance = newInstances[i];
+    if (!instance) continue;
+
+    // 현재 인스턴스의 첫 DOM 노드 찾기
+    const currentFirstDom = getFirstDomFromChildren([instance]);
+    if (!currentFirstDom) continue;
+
+    // 다음 인스턴스의 첫 DOM 노드를 anchor로 사용
+    // i + 1이 범위 내에 있고, 해당 인스턴스가 존재하면 그 첫 DOM 노드를 anchor로 사용
+    const nextInstance = i + 1 < newInstances.length ? newInstances[i + 1] : null;
+    const nextFirstDom = nextInstance ? getFirstDomFromChildren([nextInstance]) : null;
+
+    // 현재 DOM이 올바른 위치에 있는지 확인
+    // anchor가 있고, 현재 DOM이 anchor의 이전 형제가 아니면 재배치 필요
+    if (nextFirstDom) {
+      // anchor 앞에 있어야 하는데 현재 위치가 다르면 재배치
+      if (currentFirstDom.nextSibling !== nextFirstDom) {
+        // DOM 노드들을 anchor 앞에 삽입
+        const domNodes = getDomNodes(instance);
+        domNodes.forEach((node) => {
+          parentDom.insertBefore(node, nextFirstDom);
+        });
+      }
+    } else {
+      // anchor가 없으면 마지막 위치에 있어야 함
+      // 현재 DOM이 부모의 마지막 자식이 아니면 재배치
+      if (currentFirstDom.nextSibling !== null) {
+        // DOM 노드들을 마지막에 삽입
+        const domNodes = getDomNodes(instance);
+        domNodes.forEach((node) => {
+          parentDom.appendChild(node);
+        });
+      }
+    }
+  }
 
   return newInstances;
 }
