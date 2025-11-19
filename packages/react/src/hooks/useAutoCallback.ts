@@ -9,7 +9,17 @@ import { useRef } from "./useRef";
  * @returns 참조가 안정적인 콜백 함수
  */
 export const useAutoCallback = <T extends AnyFunction>(fn: T): T => {
-  // 여기를 구현하세요.
-  // useRef와 useCallback을 조합하여 구현해야 합니다.
-  return fn;
+  // 최신 fn을 보관할 ref를 생성합니다.
+  const latestFnRef = useRef(fn);
+
+  // 매 렌더마다 최신 함수를 ref에 저장합니다.
+  latestFnRef.current = fn;
+
+  // deps를 비워서 콜백 참조는 한 번만 생성하고,
+  // 실행 시점에 항상 latestFnRef.current를 호출하도록 합니다.
+  const stableCallback = useCallback((...args: Parameters<T>): ReturnType<T> => {
+    return latestFnRef.current(...args);
+  }, []);
+
+  return stableCallback as T;
 };

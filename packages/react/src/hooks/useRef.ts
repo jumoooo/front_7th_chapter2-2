@@ -8,7 +8,11 @@ import { useState } from "../core";
  * @returns `{ current: T }` 형태의 ref 객체
  */
 export const useRef = <T>(initialValue: T): { current: T } => {
-  // 여기를 구현하세요.
-  // useState를 사용하여 ref 객체를 한 번만 생성하도록 해야 합니다.
-  return { current: initialValue };
+  // useState를 사용하여 ref 객체를 한 번만 생성하도록 합니다.
+  // lazy initialization을 사용하여 초기 렌더링 시에만 객체를 생성합니다.
+  const [refObject] = useState(() => ({ current: initialValue }));
+
+  // 리렌더링이 되어도 같은 객체 참조를 반환합니다.
+  // ref.current 값을 변경해도 리렌더링을 트리거하지 않습니다.
+  return refObject;
 };

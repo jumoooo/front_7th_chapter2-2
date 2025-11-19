@@ -168,7 +168,16 @@ export const reconcile = (
     // 기존 인스턴스의 path를 사용하여 자식 인스턴스를 재조정합니다
     // 함수형 컴포넌트의 자식은 항상 컴포넌트의 path를 사용합니다
     // 중요: 자식 인스턴스가 업데이트될 때도 같은 path를 사용해야 훅 상태가 올바르게 유지됩니다
-    const childInstance = reconcile(childParentDom, existingChildInstance || null, componentVNode, componentPath);
+    let childInstance: Instance | null = null;
+    if (componentVNode) {
+      // The rendered child needs its own path, derived from the component's path.
+      // A function component has a single child, so its index is effectively 0.
+      const childPath = createChildPath(componentPath, componentVNode.key ?? null, 0);
+      childInstance = reconcile(childParentDom, existingChildInstance || null, componentVNode, childPath);
+    } else {
+      // If the component returns null, unmount the existing child.
+      childInstance = reconcile(childParentDom, existingChildInstance || null, null, componentPath); // path doesn't matter much for unmount
+    }
 
     instance.node = nextNode;
     instance.children = childInstance ? [childInstance] : [];
@@ -462,7 +471,12 @@ function mountNode(parentDom: HTMLElement, node: VNode, path: string): Instance 
   // 4) 함수형 컴포넌트 처리
   if (typeof node.type === "function") {
     const componentVNode = renderFunctionComponent(node.type, node.props, path);
-    const childInstance = reconcile(parentDom, null, componentVNode, path);
+
+    let childInstance: Instance | null = null;
+    if (componentVNode) {
+      const childPath = createChildPath(path, componentVNode.key ?? null, 0);
+      childInstance = reconcile(parentDom, null, componentVNode, childPath);
+    }
 
     return {
       kind: NodeTypes.COMPONENT,
