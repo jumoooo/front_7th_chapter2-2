@@ -347,7 +347,9 @@ function reconcileChildren(
   });
 
   // 5. DOM 순서 재배치: 역순으로 순회하여 올바른 위치에 DOM 배치
-  // 역순으로 순회하면 다음 인스턴스의 첫 DOM 노드를 anchor로 사용할 수 있어 효율적입니다
+  // 역순으로 순회하면 다음 인스턴스의 첫 DOM 노드를 anchor로 사용할 수 있어 효율적입니다.
+  // 마운트 시에도 순서를 보장하기 위해 재배치를 수행합니다.
+  // 함수형 컴포넌트와 일반 DOM 요소가 섞여 있을 때도 순서를 보장합니다.
   for (let i = newInstances.length - 1; i >= 0; i--) {
     const instance = newInstances[i];
     if (!instance) continue;
@@ -364,9 +366,13 @@ function reconcileChildren(
     // 현재 DOM이 올바른 위치에 있는지 확인
     // anchor가 있고, 현재 DOM이 anchor의 이전 형제가 아니면 재배치 필요
     if (nextFirstDom) {
-      // anchor 앞에 있어야 하는데 현재 위치가 다르면 재배치
-      if (currentFirstDom.nextSibling !== nextFirstDom) {
+      // currentFirstDom이 nextFirstDom의 바로 이전 형제인지 확인
+      // nextSibling만 확인하면 중간에 다른 노드가 있어도 감지하지 못할 수 있음
+      const isInCorrectPosition = currentFirstDom.nextSibling === nextFirstDom;
+
+      if (!isInCorrectPosition) {
         // DOM 노드들을 anchor 앞에 삽입
+        // 이미 DOM에 있는 노드를 insertBefore로 다시 삽입하면 자동으로 이동됨
         const domNodes = getDomNodes(instance);
         domNodes.forEach((node) => {
           parentDom.insertBefore(node, nextFirstDom);
@@ -374,12 +380,38 @@ function reconcileChildren(
       }
     } else {
       // anchor가 없으면 마지막 위치에 있어야 함
-      // 현재 DOM이 부모의 마지막 자식이 아니면 재배치
-      if (currentFirstDom.nextSibling !== null) {
-        // DOM 노드들을 마지막에 삽입
+      // 이전 인스턴스의 마지막 DOM 노드를 anchor로 사용하여 정확한 위치에 삽입
+      const prevInstance = i > 0 ? newInstances[i - 1] : null;
+      let anchor: HTMLElement | Text | null = null;
+
+      if (prevInstance) {
+        // 이전 인스턴스의 모든 DOM 노드 찾기
+        const prevDomNodes = getDomNodes(prevInstance);
+        if (prevDomNodes.length > 0) {
+          // 이전 인스턴스의 마지막 DOM 노드 다음에 삽입
+          anchor = prevDomNodes[prevDomNodes.length - 1].nextSibling as HTMLElement | Text | null;
+        }
+      } else {
+        // 첫 번째 자식이면 부모의 첫 번째 자식 앞에 삽입
+        anchor = parentDom.firstChild as HTMLElement | Text | null;
+      }
+
+      // 현재 DOM이 올바른 위치에 있는지 확인
+      // currentFirstDom이 anchor의 바로 이전 형제여야 함 (즉, currentFirstDom.nextSibling === anchor)
+      const isInCorrectPosition = anchor
+        ? currentFirstDom.nextSibling === anchor
+        : currentFirstDom.previousSibling === null;
+
+      if (!isInCorrectPosition) {
+        // DOM 노드들을 올바른 위치에 삽입
+        // 이미 DOM에 있는 노드를 insertBefore로 다시 삽입하면 자동으로 이동됨
         const domNodes = getDomNodes(instance);
         domNodes.forEach((node) => {
-          parentDom.appendChild(node);
+          if (anchor) {
+            parentDom.insertBefore(node, anchor);
+          } else {
+            parentDom.appendChild(node);
+          }
         });
       }
     }
@@ -430,10 +462,9 @@ function mountNode(parentDom: HTMLElement, node: VNode, path: string): Instance 
 
   // 2) Fragment 처리 (자식만 이어 붙임)
   if (node.type === Fragment) {
+    // Fragment도 reconcileChildren을 사용하여 순서를 보장합니다.
     const childNodes = normalizeChildren(node.props.children);
-    const children = childNodes.map((childVNode, index) =>
-      reconcile(parentDom, null, childVNode, createChildPath(path, childVNode.key ?? null, index)),
-    );
+    const children = reconcileChildren(parentDom, [], childNodes, path);
 
     return {
       kind: NodeTypes.FRAGMENT,
@@ -450,10 +481,10 @@ function mountNode(parentDom: HTMLElement, node: VNode, path: string): Instance 
     const dom = document.createElement(node.type as string);
     setDomProps(dom, node.props);
 
+    // 자식들을 reconcileChildren으로 처리하여 순서를 보장합니다.
+    // 마운트 시에도 reconcileChildren을 사용하면 순서 보장 로직이 실행됩니다.
     const childNodes = normalizeChildren(node.props.children);
-    const children = childNodes.map((childVNode, index) =>
-      reconcile(dom, null, childVNode, createChildPath(path, childVNode.key ?? null, index)),
-    );
+    const children = reconcileChildren(dom, [], childNodes, path);
 
     const newInstance: Instance = {
       kind: NodeTypes.HOST,

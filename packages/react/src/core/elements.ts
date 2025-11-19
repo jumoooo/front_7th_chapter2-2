@@ -60,28 +60,28 @@ export const createElement = (
   const props = { ...originProps };
   if (props && "key" in props) delete props.key;
 
-  // children 초기화
+  // children 초기화 및 정규화
+  // 모든 타입(문자열, 심볼, 함수형 컴포넌트)에 대해 children을 처리해야 합니다.
+  // 함수형 컴포넌트도 children을 props로 받을 수 있어야 합니다.
   let children: VNode[] = [];
 
-  // 함수형 컴포넌트가 아니면 children 처리
-  if (typeof type === "string" || typeof type === "symbol") {
-    // rawChildren 정규화
-    children =
-      rawChildren.length > 0
-        ? (rawChildren
-            .map((child) => normalizeNode(child))
-            .flat()
-            .filter(Boolean) as VNode[])
-        : ([] as VNode[]);
+  // 모든 타입에 대해 children을 정규화합니다.
+  if (rawChildren.length > 0) {
+    children = rawChildren
+      .map((child) => normalizeNode(child))
+      .flat()
+      .filter(Boolean) as VNode[];
   }
 
   // 최종 VNode 반환
+  // children이 있으면 props에 포함하고, 없으면 포함하지 않습니다.
+  // (기존 테스트와의 호환성을 위해 빈 배열은 props에 포함하지 않음)
   return {
     type,
     key,
     props: {
       ...props,
-      ...(children.length > 0 ? { children } : {}), // children 없는 경우 아예 props에 넣지 않음
+      ...(children.length > 0 ? { children } : {}), // children이 있을 때만 props에 포함
     },
   } as VNode;
 };

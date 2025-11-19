@@ -158,3 +158,57 @@ const cartReducer = (_, action) => {
  * 장바구니 스토어 생성
  */
 export const cartStore = createStore(cartReducer, initialState);
+
+/**
+ * 장바구니 스토어 초기화 함수
+ * 스토리지에서 데이터를 로드하거나 초기값을 설정합니다.
+ */
+const initializeCartStore = () => {
+  try {
+    const savedCart = cartStorage.get();
+
+    // 스토리지에 유효한 데이터가 있는지 검증
+    if (
+      savedCart &&
+      typeof savedCart === "object" &&
+      Array.isArray(savedCart.items) &&
+      typeof savedCart.selectedAll === "boolean"
+    ) {
+      // 유효한 스토리지 데이터가 있으면 로드
+      cartStore.dispatch({
+        type: CART_ACTIONS.LOAD_FROM_STORAGE,
+        payload: savedCart,
+      });
+    } else {
+      // 유효하지 않거나 없으면 초기값 설정 및 스토리지에 저장
+      cartStorage.set(initialState);
+      cartStore.dispatch({
+        type: CART_ACTIONS.LOAD_FROM_STORAGE,
+        payload: initialState,
+      });
+    }
+  } catch (error) {
+    console.error("장바구니 스토어 초기화 실패:", error);
+    // 에러 발생 시 초기값으로 설정
+    cartStorage.set(initialState);
+    cartStore.dispatch({
+      type: CART_ACTIONS.LOAD_FROM_STORAGE,
+      payload: initialState,
+    });
+  }
+};
+
+// 스토어 생성 직후 즉시 초기화
+initializeCartStore();
+
+// getState() 래핑: 항상 안전한 구조를 반환하도록 보장
+const originalGetState = cartStore.getState;
+cartStore.getState = () => {
+  const state = originalGetState();
+
+  // 안전장치: state가 유효하지 않거나 items가 배열이 아닌 경우 처리
+  return {
+    items: Array.isArray(state?.items) ? state.items : [],
+    selectedAll: state?.selectedAll ?? false,
+  };
+};
