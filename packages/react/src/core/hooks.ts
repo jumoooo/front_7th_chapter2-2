@@ -10,26 +10,63 @@ import { HookTypes } from "./constants";
  * 각 이펙트를 실행하고, 클린업 함수가 반환되면 훅에 저장합니다.
  */
 export const flushEffects = (): void => {
+  // 디버깅 모드: flushEffects 실행 로깅
+  const isDebugMode =
+    typeof window !== "undefined" &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((window as any).__REACT_DEBUG_EFFECTS__ || localStorage.getItem("__REACT_DEBUG_EFFECTS__") === "true");
+
+  if (isDebugMode) {
+    console.log("[React] flushEffects called", {
+      queueLength: context.effects.queue.length,
+      queue: context.effects.queue.map(({ path, cursor }) => ({ path, cursor })),
+    });
+  }
+
   // 큐에 있는 모든 이펙트를 실행합니다.
   while (context.effects.queue.length > 0) {
     const { path, cursor } = context.effects.queue.shift()!;
 
+    if (isDebugMode) {
+      console.log("[React] flushEffects: executing effect", { path, cursor });
+    }
+
     // 해당 경로의 훅 상태 배열에서 이펙트 훅을 찾습니다.
     const hooksForPath = context.hooks.state.get(path);
-    if (!hooksForPath) continue;
+    if (!hooksForPath) {
+      if (isDebugMode) {
+        console.warn("[React] flushEffects: hooks not found for path", path);
+      }
+      continue;
+    }
 
     const hook = hooksForPath[cursor] as EffectHook | undefined;
-    if (!hook || hook.kind !== HookTypes.EFFECT) continue;
+    if (!hook || hook.kind !== HookTypes.EFFECT) {
+      if (isDebugMode) {
+        console.warn("[React] flushEffects: effect hook not found", { path, cursor, hook: hook?.kind });
+      }
+      continue;
+    }
 
     // 이펙트 함수를 실행합니다.
+    if (isDebugMode) {
+      console.log("[React] flushEffects: calling effect function", { path, cursor });
+    }
     const cleanup = hook.effect();
 
     // 클린업 함수가 반환되면 훅에 저장합니다.
     if (typeof cleanup === "function") {
       hook.cleanup = cleanup;
+      if (isDebugMode) {
+        console.log("[React] flushEffects: cleanup function stored", { path, cursor });
+      }
     } else {
       hook.cleanup = null;
     }
+  }
+
+  if (isDebugMode) {
+    console.log("[React] flushEffects completed");
   }
 };
 
@@ -40,14 +77,38 @@ export const flushEffects = (): void => {
 export const cleanupUnusedHooks = () => {
   if (!context.hooks) return;
 
+  // 디버깅 모드: cleanupUnusedHooks 실행 로깅
+  const isDebugMode =
+    typeof window !== "undefined" &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((window as any).__REACT_DEBUG_EFFECTS__ || localStorage.getItem("__REACT_DEBUG_EFFECTS__") === "true");
+
+  if (isDebugMode) {
+    console.log("[React] cleanupUnusedHooks called", {
+      visitedPaths: Array.from(context.hooks.visited),
+      allPaths: Array.from(context.hooks.state.keys()),
+      pathsToCleanup: Array.from(context.hooks.state.keys()).filter((path) => !context.hooks.visited.has(path)),
+    });
+  }
+
   // visited Set에 없는 경로의 훅들을 정리합니다.
   for (const [path, hooks] of context.hooks.state.entries()) {
     if (!context.hooks.visited.has(path)) {
+      if (isDebugMode) {
+        console.log("[React] cleanupUnusedHooks: cleaning up path", path, {
+          hooksCount: hooks.length,
+          effectHooks: hooks.filter((h) => h.kind === HookTypes.EFFECT).length,
+        });
+      }
+
       // 이펙트 클린업 함수 실행
       hooks.forEach((hook) => {
         if (hook.kind === HookTypes.EFFECT) {
           const effectHook = hook as EffectHook;
           if (effectHook.cleanup && typeof effectHook.cleanup === "function") {
+            if (isDebugMode) {
+              console.log("[React] cleanupUnusedHooks: executing cleanup for path", path);
+            }
             effectHook.cleanup(); // effect cleanup 실행
           }
         }
@@ -131,13 +192,28 @@ export const useEffect = (effect: () => (() => void) | void, deps?: unknown[]): 
     !prevHook || // 첫 렌더링
     !shallowEquals(prevHook.deps, deps); // 의존성 변경
 
-  // 4. 이전 클린업 함수가 있으면 먼저 실행합니다.
-  if (prevHook && prevHook.cleanup) {
-    prevHook.cleanup();
-  }
+  // 디버깅 모드: useEffect cleanup 실행 로깅
+  const isDebugMode =
+    typeof window !== "undefined" &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((window as any).__REACT_DEBUG_EFFECTS__ || localStorage.getItem("__REACT_DEBUG_EFFECTS__") === "true");
 
-  // 5. 이펙트를 실행해야 하는 경우, 큐에 추가합니다.
+  // 4. 이펙트를 실행해야 하는 경우, 이전 클린업 함수가 있으면 먼저 실행합니다.
+  // cleanup은 의존성이 변경되었을 때만 실행되어야 합니다.
   if (shouldRunEffect) {
+    // 이전 클린업 함수가 있으면 먼저 실행합니다.
+    if (prevHook && prevHook.cleanup) {
+      if (isDebugMode) {
+        console.log("[React] useEffect: executing cleanup due to dependency change", {
+          path,
+          cursor,
+          prevDeps: prevHook.deps,
+          nextDeps: deps,
+          depsChanged: !shallowEquals(prevHook.deps, deps),
+        });
+      }
+      prevHook.cleanup();
+    }
     // 이펙트 함수와 의존성 배열을 훅에 저장합니다.
     const hook: EffectHook = {
       kind: HookTypes.EFFECT,
@@ -149,6 +225,15 @@ export const useEffect = (effect: () => (() => void) | void, deps?: unknown[]): 
 
     // 이펙트 실행을 큐에 추가합니다 (렌더링 후 비동기로 실행됨)
     context.effects.queue.push({ path, cursor });
+
+    if (isDebugMode) {
+      console.log("[React] useEffect: effect queued", {
+        path,
+        cursor,
+        deps: deps ?? null,
+        queueLength: context.effects.queue.length,
+      });
+    }
   } else {
     // 의존성이 변경되지 않았으면 기존 훅을 유지합니다.
     // 이펙트는 실행하지 않지만, 훅 인덱스는 유지해야 합니다.

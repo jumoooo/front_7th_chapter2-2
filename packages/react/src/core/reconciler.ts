@@ -452,6 +452,21 @@ function renderFunctionComponent(
   props: VNode["props"],
   path: string,
 ): VNode | null {
+  // 디버깅 모드: renderFunctionComponent 실행 로깅
+  const isDebugMode =
+    typeof window !== "undefined" &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((window as any).__REACT_DEBUG_EFFECTS__ || localStorage.getItem("__REACT_DEBUG_EFFECTS__") === "true");
+
+  if (isDebugMode) {
+    const componentName = typeof component === "function" ? component.name || "Anonymous" : "Unknown";
+    console.log("[React] renderFunctionComponent called", {
+      componentName,
+      path,
+      visitedBefore: context.hooks.visited.has(path),
+    });
+  }
+
   context.hooks.componentStack.push(path);
   context.hooks.visited.add(path);
   context.hooks.cursor.set(path, 0);
