@@ -3,6 +3,7 @@ import { context } from "./context";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { NodeType, NodeTypes } from "./constants";
 import { Instance } from "./types";
+import { addEventHandler, removeEventHandler } from "./events";
 
 /**
  * DOM 요소에 속성(props)을 설정합니다.
@@ -12,6 +13,23 @@ import { Instance } from "./types";
  * @param props - 설정할 속성 객체 (children은 제외)
  */
 export const setDomProps = (dom: HTMLElement, props: Record<string, any>): void => {
+  // 디버깅 모드: setDomProps 호출 로깅
+  const isDebugMode =
+    typeof window !== "undefined" &&
+    ((window as any).__REACT_DEBUG_EVENTS__ || localStorage.getItem("__REACT_DEBUG_EVENTS__") === "true");
+
+  if (isDebugMode) {
+    console.log("[DOM] setDomProps called", {
+      dom,
+      domId: dom.id || dom.className || "no-id",
+      domTag: dom.tagName,
+      propsKeys: Object.keys(props),
+      hasOnKeyDown: "onKeyDown" in props || "onkeydown" in props,
+      hasOnChange: "onChange" in props || "onchange" in props,
+      hasOnClick: "onClick" in props || "onclick" in props,
+    });
+  }
+
   // children은 별도로 reconcile에서 처리하므로 제외
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { children, ...domProps } = props;
@@ -35,8 +53,7 @@ export const setDomProps = (dom: HTMLElement, props: Record<string, any>): void 
     if (key.startsWith("on") && typeof value === "function") {
       // 이벤트 이름을 소문자로 변환 (onClick -> click)
       const eventName = key.slice(2).toLowerCase();
-      // 이벤트 리스너 등록
-      dom.addEventListener(eventName, value);
+      addEventHandler(dom, eventName, value);
       return;
     }
 
@@ -61,6 +78,24 @@ export const updateDomProps = (
   prevProps: Record<string, any> = {},
   nextProps: Record<string, any> = {},
 ): void => {
+  // 디버깅 모드: updateDomProps 호출 로깅
+  const isDebugMode =
+    typeof window !== "undefined" &&
+    ((window as any).__REACT_DEBUG_EVENTS__ || localStorage.getItem("__REACT_DEBUG_EVENTS__") === "true");
+
+  if (isDebugMode) {
+    console.log("[DOM] updateDomProps called", {
+      dom,
+      domId: dom.id || dom.className || "no-id",
+      domTag: dom.tagName,
+      prevPropsKeys: Object.keys(prevProps),
+      nextPropsKeys: Object.keys(nextProps),
+      hasOnKeyDown: "onKeyDown" in nextProps || "onkeydown" in nextProps,
+      hasOnChange: "onChange" in nextProps || "onchange" in nextProps,
+      hasOnClick: "onClick" in nextProps || "onclick" in nextProps,
+    });
+  }
+
   // children은 별도로 reconcile에서 처리하므로 제외
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { children: prevChildren, ...prevDomProps } = prevProps;
@@ -72,7 +107,7 @@ export const updateDomProps = (
     // 이벤트 핸들러 제거
     if (key.startsWith("on") && typeof prevDomProps[key] === "function") {
       const eventName = key.slice(2).toLowerCase();
-      dom.removeEventListener(eventName, prevDomProps[key]);
+      removeEventHandler(dom, eventName);
       return;
     }
 
@@ -107,7 +142,37 @@ export const updateDomProps = (
     const prevValue = prevDomProps[key];
     const nextValue = nextDomProps[key];
 
+    // 이벤트 핸들러는 함수 참조가 같아도 항상 재등록해야 함
+    // (이벤트 시스템에서 핸들러를 업데이트할 수 있도록)
+    if (key.startsWith("on") && typeof nextValue === "function") {
+      const eventName = key.slice(2).toLowerCase();
+      // 디버깅 모드: 이벤트 핸들러 업데이트 로깅
+      const isDebugMode =
+        typeof window !== "undefined" &&
+        ((window as any).__REACT_DEBUG_EVENTS__ || localStorage.getItem("__REACT_DEBUG_EVENTS__") === "true");
+
+      if (isDebugMode) {
+        console.log("[DOM] updateDomProps: registering event handler", {
+          dom,
+          domId: dom.id || dom.className || "no-id",
+          prop: key,
+          eventName,
+          prevValue: prevValue,
+          nextValue: typeof nextValue === "function",
+          isSameReference: Object.is(prevValue, nextValue),
+        });
+      }
+      // 이전 핸들러가 있으면 제거
+      if (prevValue && typeof prevValue === "function") {
+        removeEventHandler(dom, eventName);
+      }
+      // 새 핸들러 등록
+      addEventHandler(dom, eventName, nextValue);
+      return;
+    }
+
     // 값이 같으면 스킵 (Object.is로 비교)
+    // 이벤트 핸들러는 위에서 이미 처리했으므로 여기서는 스킵
     if (Object.is(prevValue, nextValue)) {
       return;
     }
@@ -125,18 +190,6 @@ export const updateDomProps = (
       } else {
         dom.style.cssText = nextValue || "";
       }
-      return;
-    }
-
-    // 이벤트 핸들러 업데이트
-    if (key.startsWith("on") && typeof nextValue === "function") {
-      const eventName = key.slice(2).toLowerCase();
-      // 이전 핸들러가 있으면 제거
-      if (typeof prevValue === "function") {
-        dom.removeEventListener(eventName, prevValue);
-      }
-      // 새로운 핸들러 등록
-      dom.addEventListener(eventName, nextValue);
       return;
     }
 
@@ -229,8 +282,18 @@ export const insertInstance = (
 ): void => {
   if (!instance) return;
 
+  // parentDom 유효성 검사
+  // 함수형 컴포넌트 재조정 시 부모 DOM 참조가 끊기는 문제를 방지합니다.
+  if (!parentDom || !(parentDom instanceof HTMLElement)) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[insertInstance] parentDom이 유효하지 않습니다.", "instance:", instance, "parentDom:", parentDom);
+    }
+    return;
+  }
+
   // 실제 DOM 노드들 가져오기
   const domNodes = getDomNodes(instance);
+  if (domNodes.length === 0) return;
 
   // 부모에 삽입
   domNodes.forEach((node) => {

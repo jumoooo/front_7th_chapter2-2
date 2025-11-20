@@ -82,4 +82,10 @@ export const context: Context = {
   effects: {
     queue: [],
   },
+
+  /**
+   * 이벤트 위임 시스템을 위한 루트 컨테이너입니다.
+   * 이벤트 핸들러가 등록된 최상위 DOM 요소를 저장합니다.
+   */
+  eventRoot: null as HTMLElement | null,
 };

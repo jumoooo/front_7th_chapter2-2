@@ -4,6 +4,7 @@ import { getDomNodes, insertInstance } from "./dom";
 import { reconcile } from "./reconciler";
 import { cleanupUnusedHooks, flushEffects } from "./hooks";
 import { withEnqueue, enqueue } from "../utils";
+// React DOM 스타일: 이벤트 루트는 createRoot에서 설정되므로 render에서는 제거
 
 /**
  * 루트 컴포넌트의 렌더링을 수행하는 함수입니다.
@@ -12,6 +13,13 @@ import { withEnqueue, enqueue } from "../utils";
 export const render = (): void => {
   const root = context.root;
   if (!root.container || !root.node) return;
+
+  // React DOM 스타일: 이벤트 루트는 createRoot에서 이미 설정되었으므로
+  // render에서는 이벤트 루트를 다시 설정하지 않음
+  // 만약 eventRoot가 설정되지 않았다면 경고만 출력 (개발 환경)
+  if (!context.eventRoot && process.env.NODE_ENV !== "production") {
+    console.warn("[render] 이벤트 루트가 설정되지 않았습니다. createRoot에서 setEventRoot를 호출해야 합니다.");
+  }
 
   // 1. visited Set만 초기화합니다. (상태는 유지해야 함)
   // 각 컴포넌트 렌더링 시 reconcile에서 cursor는 이미 0으로 리셋됩니다.

@@ -72,6 +72,7 @@ export interface Context {
   root: RootContext;
   hooks: HooksContext;
   effects: EffectsContext;
+  eventRoot: HTMLElement | null;
 }
 
 declare global {

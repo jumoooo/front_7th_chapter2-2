@@ -141,47 +141,71 @@ export const reconcile = (
 
   // 함수형 컴포넌트 업데이트
   if (typeof nextNode.type === "function") {
-    // 기존 인스턴스의 path를 사용하여 훅 상태를 올바르게 유지합니다
-    // path는 컴포넌트 트리에서의 위치를 나타내므로 변경되면 안 됩니다
-    const componentPath = instance.path;
-    const componentVNode = renderFunctionComponent(nextNode.type, nextNode.props, componentPath);
+    // 1. 타입이 같은지 확인 (컴포넌트 업데이트)
+    if (instance && instance.node.type === nextNode.type) {
+      const componentPath = instance.path;
 
-    // 함수형 컴포넌트는 dom이 null이므로, 자식 인스턴스의 DOM을 찾아서 부모로 사용해야 함
-    // 기존 자식 인스턴스가 있으면 그 DOM의 부모를 찾아서 사용하고, 없으면 parentDom을 사용
-    const existingChildInstance = instance.children?.[0];
-    let childParentDom = parentDom;
+      // 2. 컴포넌트 함수를 다시 실행하여 새로운 자식 VNode를 얻습니다.
+      const nextChildVNode = renderFunctionComponent(nextNode.type, nextNode.props, componentPath);
 
-    if (existingChildInstance) {
-      // 자식 인스턴스의 첫 번째 DOM 노드를 찾음
-      const childDom = getFirstDomFromChildren([existingChildInstance]);
-      if (childDom) {
-        // DOM 노드의 부모 요소를 찾음 (Text 노드인 경우도 처리)
-        // parentElement는 HTMLElement만 반환하므로, Text 노드의 경우 parentNode를 사용
-        if (childDom.parentElement) {
-          childParentDom = childDom.parentElement;
-        } else if (childDom.parentNode && childDom.parentNode instanceof HTMLElement) {
-          childParentDom = childDom.parentNode;
+      // 3. 이전 자식 인스턴스와 새로운 자식 VNode를 재조정합니다.
+      const prevChildInstance = instance.children?.[0] || null;
+
+      // 함수형 컴포넌트는 DOM이 없으므로, 자식의 실제 부모 DOM을 찾아야 합니다.
+      // 상위에서 받은 parentDom이 항상 정확하지 않을 수 있습니다.
+      let childParentDom = parentDom;
+      if (prevChildInstance) {
+        const firstChildDom = getFirstDomFromChildren([prevChildInstance]);
+        if (firstChildDom) {
+          // Text 노드인 경우 parentNode를 사용하고, HTMLElement인 경우 parentElement를 사용
+          const actualParent =
+            firstChildDom.parentElement ||
+            (firstChildDom.parentNode instanceof HTMLElement ? firstChildDom.parentNode : null);
+          if (actualParent) {
+            childParentDom = actualParent;
+          }
         }
       }
-    }
 
-    // 기존 인스턴스의 path를 사용하여 자식 인스턴스를 재조정합니다
-    // 함수형 컴포넌트의 자식은 항상 컴포넌트의 path를 사용합니다
-    // 중요: 자식 인스턴스가 업데이트될 때도 같은 path를 사용해야 훅 상태가 올바르게 유지됩니다
-    let childInstance: Instance | null = null;
-    if (componentVNode) {
-      // The rendered child needs its own path, derived from the component's path.
-      // A function component has a single child, so its index is effectively 0.
-      const childPath = createChildPath(componentPath, componentVNode.key ?? null, 0);
-      childInstance = reconcile(childParentDom, existingChildInstance || null, componentVNode, childPath);
+      // childParentDom이 유효하지 않으면 상위에서 받은 parentDom을 사용
+      // 하지만 parentDom도 유효하지 않으면 에러를 발생시킵니다.
+      if (!childParentDom || !(childParentDom instanceof HTMLElement)) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(
+            "[reconcile] 함수형 컴포넌트 재조정 시 유효한 parentDom을 찾을 수 없습니다.",
+            "path:",
+            componentPath,
+            "parentDom:",
+            parentDom,
+            "prevChildInstance:",
+            prevChildInstance,
+          );
+        }
+        // 유효한 parentDom이 없으면 업데이트를 건너뛰고 기존 인스턴스를 반환
+        instance.node = nextNode;
+        return instance;
+      }
+
+      const nextChildInstance = reconcile(
+        childParentDom,
+        prevChildInstance,
+        nextChildVNode,
+        // 자식의 path는 부모(컴포넌트)의 path를 기반으로 생성되어야 합니다.
+        createChildPath(componentPath, nextChildVNode?.key ?? null, 0),
+      );
+
+      // 4. 현재 인스턴스의 정보를 업데이트합니다.
+      instance.node = nextNode;
+      instance.children = nextChildInstance ? [nextChildInstance] : [];
+
+      return instance;
     } else {
-      // If the component returns null, unmount the existing child.
-      childInstance = reconcile(childParentDom, existingChildInstance || null, null, componentPath); // path doesn't matter much for unmount
+      // 타입이 다르면 새로 마운트합니다 (이 로직은 이미 mountNode에서 처리됨).
+      if (instance) {
+        removeInstance(parentDom, instance);
+      }
+      return mountNode(parentDom, nextNode, path);
     }
-
-    instance.node = nextNode;
-    instance.children = childInstance ? [childInstance] : [];
-    return instance;
   }
 
   return instance;
